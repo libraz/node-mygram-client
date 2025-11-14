@@ -1,0 +1,95 @@
+{
+  "name": "mygram-client",
+  "version": "0.1.0",
+  "description": "Node.js client library for MygramDB - High-performance in-memory full-text search engine",
+  "type": "module",
+  "packageManager": "yarn@4.9.1",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "native",
+    "binding.gyp",
+    "build/Release/*.node",
+    "README.md",
+    "LICENSE"
+  ],
+  "binary": {
+    "module_name": "mygram_native",
+    "module_path": "./lib/binding/{node_abi}-{platform}-{arch}",
+    "host": "https://github.com/libraz/node-mygram-client/releases/download/",
+    "remote_path": "{version}",
+    "package_name": "{module_name}-v{version}-{node_abi}-{platform}-{arch}.tar.gz"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "yarn clean && yarn build:ts && yarn build:native && node scripts/postbuild-copy.cjs",
+    "build:ts": "tsc && vite build",
+    "build:native": "node-gyp rebuild",
+    "build:native:debug": "node-gyp rebuild --debug",
+    "clean": "rimraf dist lib build",
+    "clean:native": "rimraf build lib",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json}\"",
+    "type-check": "tsc --noEmit",
+    "install": "node-pre-gyp install --fallback-to-build || node-gyp rebuild || echo 'Native build optional, using pure JavaScript fallback'",
+    "prepare": "yarn build || echo 'Build failed, but package still usable with pure JS'"
+  },
+  "keywords": [
+    "mygramdb",
+    "fulltext",
+    "search",
+    "mysql",
+    "client",
+    "database",
+    "ngram",
+    "typescript"
+  ],
+  "author": "libraz <libraz@libraz.net>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bindings": "^1",
+    "@types/node": "^20.10.5",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vitest/ui": "^1.0.4",
+    "eslint": "^8.56.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-airbnb-typescript": "^17.1.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-prettier": "^5.0.1",
+    "node-gyp": "^10.0.1",
+    "prettier": "^3.1.1",
+    "rimraf": "^6.1.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vite-plugin-dts": "^3.7.0",
+    "vitest": "^1.0.4"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "volta": {
+    "node": "22.20.0",
+    "yarn": "4.9.1"
+  },
+  "dependencies": {
+    "@mapbox/node-pre-gyp": "^2.0.0",
+    "bindings": "^1.5.0"
+  }
+}

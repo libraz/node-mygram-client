@@ -1,0 +1,28 @@
+# Source files
+src/
+*.test.ts
+*.spec.ts
+
+# Build files
+tsconfig.json
+vite.config.ts
+vitest.config.ts
+
+# Examples
+examples/
+
+# Configuration
+.eslintrc.cjs
+.prettierrc.json
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+.vitest/
+
+# Misc
+.DS_Store
+*.log
