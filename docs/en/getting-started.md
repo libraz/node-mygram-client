@@ -166,6 +166,7 @@ import type { ClientConfig, SearchResponse, SearchOptions } from 'mygram-client'
 const config: ClientConfig = {
   host: 'localhost',
   port: 11016,
+  maxQueryLength: 256,
 };
 
 const options: SearchOptions = {
@@ -199,3 +200,8 @@ If you get protocol errors:
 - Ensure you're using a compatible version of MygramDB
 - Check server logs for error details
 - Verify the table name and query syntax are correct
+
+### Input Validation Errors
+
+If you see `InputValidationError`, inspect the query and filter values for control characters or overly long expressions.
+Increase `ClientConfig.maxQueryLength` (and the server-side `api.max_query_length`) if the application legitimately needs longer queries.

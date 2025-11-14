@@ -16,12 +16,20 @@ import {
   DebugInfo
 } from './types';
 import { ConnectionError, ProtocolError, TimeoutError } from './errors';
+import {
+  DEFAULT_MAX_QUERY_LENGTH,
+  ensureSafeCommandValue,
+  ensureSafeFilters,
+  ensureSafeStringArray,
+  ensureQueryLengthWithinLimit
+} from './command-utils';
 
 const DEFAULT_CONFIG: Required<ClientConfig> = {
   host: '127.0.0.1',
   port: 11016,
   timeout: 5000,
-  recvBufferSize: 65536
+  recvBufferSize: 65536,
+  maxQueryLength: DEFAULT_MAX_QUERY_LENGTH
 };
 
 /**
@@ -56,7 +64,11 @@ export class MygramClient {
    * @param {ClientConfig} [config={}] - Client configuration
    */
   constructor(config: ClientConfig = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    const mergedConfig: Required<ClientConfig> = { ...DEFAULT_CONFIG, ...config };
+    if (typeof mergedConfig.maxQueryLength !== 'number' || Number.isNaN(mergedConfig.maxQueryLength)) {
+      mergedConfig.maxQueryLength = DEFAULT_MAX_QUERY_LENGTH;
+    }
+    this.config = mergedConfig;
   }
 
   /**
@@ -161,7 +173,25 @@ export class MygramClient {
       sortDesc = true
     } = options;
 
-    const parts: string[] = ['SEARCH', table, query];
+    const safeTable = ensureSafeCommandValue(table, 'table');
+    const safeQuery = ensureSafeCommandValue(query, 'query');
+    ensureSafeStringArray(andTerms, 'andTerms');
+    ensureSafeStringArray(notTerms, 'notTerms');
+    const safeFilters = ensureSafeFilters(filters);
+    const safeSortColumn = sortColumn ? ensureSafeCommandValue(sortColumn, 'sortColumn') : '';
+
+    ensureQueryLengthWithinLimit(
+      {
+        query: safeQuery,
+        andTerms,
+        notTerms,
+        filters: safeFilters,
+        sortColumn: safeSortColumn
+      },
+      this.config.maxQueryLength
+    );
+
+    const parts: string[] = ['SEARCH', safeTable, safeQuery];
 
     // Add AND terms
     if (andTerms.length > 0) {
@@ -178,7 +208,7 @@ export class MygramClient {
     }
 
     // Add filters
-    const filterEntries = Object.entries(filters);
+    const filterEntries = Object.entries(safeFilters);
     if (filterEntries.length > 0) {
       parts.push('FILTER');
       filterEntries.forEach(([key, value], index) => {
@@ -188,8 +218,8 @@ export class MygramClient {
     }
 
     // Add sort
-    if (sortColumn) {
-      parts.push('SORT', sortColumn, sortDesc ? 'DESC' : 'ASC');
+    if (safeSortColumn) {
+      parts.push('SORT', safeSortColumn, sortDesc ? 'DESC' : 'ASC');
     }
 
     // Add limit and offset
@@ -217,7 +247,23 @@ export class MygramClient {
   async count(table: string, query: string, options: CountOptions = {}): Promise<CountResponse> {
     const { andTerms = [], notTerms = [], filters = {} } = options;
 
-    const parts: string[] = ['COUNT', table, query];
+    const safeTable = ensureSafeCommandValue(table, 'table');
+    const safeQuery = ensureSafeCommandValue(query, 'query');
+    ensureSafeStringArray(andTerms, 'andTerms');
+    ensureSafeStringArray(notTerms, 'notTerms');
+    const safeFilters = ensureSafeFilters(filters);
+    ensureQueryLengthWithinLimit(
+      {
+        query: safeQuery,
+        andTerms,
+        notTerms,
+        filters: safeFilters,
+        sortColumn: ''
+      },
+      this.config.maxQueryLength
+    );
+
+    const parts: string[] = ['COUNT', safeTable, safeQuery];
 
     // Add AND terms
     if (andTerms.length > 0) {
@@ -234,7 +280,7 @@ export class MygramClient {
     }
 
     // Add filters
-    const filterEntries = Object.entries(filters);
+    const filterEntries = Object.entries(safeFilters);
     if (filterEntries.length > 0) {
       parts.push('FILTER');
       filterEntries.forEach(([key, value], index) => {
@@ -258,7 +304,9 @@ export class MygramClient {
    * @throws {ProtocolError} If server returns an error
    */
   async get(table: string, primaryKey: string): Promise<Document> {
-    const response = await this.sendCommand(`GET ${table} ${primaryKey}`);
+    const safeTable = ensureSafeCommandValue(table, 'table');
+    const safePrimaryKey = ensureSafeCommandValue(primaryKey, 'primaryKey');
+    const response = await this.sendCommand(`GET ${safeTable} ${safePrimaryKey}`);
     return MygramClient.parseDocumentResponse(response);
   }
 

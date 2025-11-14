@@ -99,6 +99,7 @@ async search(
 **戻り値:** SearchResponseに解決されるPromise
 
 **例外:**
+- `InputValidationError` - クエリに制御文字が含まれる、または設定した長さ制限を超えた場合
 - `ConnectionError` - 接続されていない場合
 - `TimeoutError` - リクエストがタイムアウトした場合
 - `ProtocolError` - サーバーがエラーを返した場合
@@ -141,6 +142,7 @@ async count(
 **戻り値:** CountResponseに解決されるPromise
 
 **例外:**
+- `InputValidationError` - クエリに制御文字が含まれる、または設定した長さ制限を超えた場合
 - `ConnectionError` - 接続されていない場合
 - `TimeoutError` - リクエストがタイムアウトした場合
 - `ProtocolError` - サーバーがエラーを返した場合
@@ -355,6 +357,7 @@ interface ClientConfig {
   port?: number;           // サーバーポート（デフォルト: 11016）
   timeout?: number;        // 接続タイムアウト（ミリ秒、デフォルト: 5000）
   recvBufferSize?: number; // 受信バッファサイズ（バイト、デフォルト: 65536）
+  maxQueryLength?: number; // クエリ式の最大文字数（デフォルト: 128）
 }
 ```
 
@@ -414,6 +417,12 @@ interface Document {
   primaryKey: string;                // プライマリキー
   fields: Record<string, string>;    // ドキュメントフィールド（カラム: 値）
 }
+
+### InputValidationError
+
+クエリやフィルタ値に改行などの制御文字が含まれている場合や、`ClientConfig.maxQueryLength`
+で設定した上限を超える長さのクエリ式を送信しようとした場合に発生するクライアント側のエラーです。
+入力内容を見直すか、意図的に長いクエリが必要な場合は上限値を調整してください。
 ```
 
 ### ServerInfo

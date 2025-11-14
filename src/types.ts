@@ -14,6 +14,8 @@ export interface ClientConfig {
   timeout?: number;
   /** Receive buffer size in bytes */
   recvBufferSize?: number;
+  /** Maximum allowed query expression length (characters) */
+  maxQueryLength?: number;
 }
 
 /**

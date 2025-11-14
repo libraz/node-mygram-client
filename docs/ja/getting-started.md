@@ -166,6 +166,7 @@ import type { ClientConfig, SearchResponse, SearchOptions } from 'mygram-client'
 const config: ClientConfig = {
   host: 'localhost',
   port: 11016,
+  maxQueryLength: 256,
 };
 
 const options: SearchOptions = {
@@ -199,3 +200,9 @@ const results: SearchResponse = await client.search('articles', 'test', options)
 - 互換性のある MygramDB バージョンを使用していることを確認
 - サーバーログでエラーの詳細を確認
 - テーブル名とクエリ構文が正しいことを確認
+
+### 入力検証エラー
+
+`InputValidationError` が発生した場合は、クエリやフィルタ値に改行などの制御文字が含まれていないか、
+あるいはクエリ式が長すぎないかを確認してください。正当な理由で長いクエリが必要な場合は、
+クライアントの `ClientConfig.maxQueryLength` とサーバー側の `api.max_query_length` を増やしてください。

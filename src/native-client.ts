@@ -17,6 +17,13 @@ import {
   DebugInfo
 } from './types';
 import { ConnectionError, ProtocolError } from './errors';
+import {
+  DEFAULT_MAX_QUERY_LENGTH,
+  ensureSafeCommandValue,
+  ensureSafeFilters,
+  ensureSafeStringArray,
+  ensureQueryLengthWithinLimit
+} from './command-utils';
 
 // Native binding interface
 interface NativeBinding {
@@ -34,7 +41,8 @@ const DEFAULT_CONFIG: Required<ClientConfig> = {
   host: '127.0.0.1',
   port: 11016,
   timeout: 5000,
-  recvBufferSize: 65536
+  recvBufferSize: 65536,
+  maxQueryLength: DEFAULT_MAX_QUERY_LENGTH
 };
 
 /**
@@ -46,7 +54,7 @@ const DEFAULT_CONFIG: Required<ClientConfig> = {
 export class NativeMygramClient {
   private config: Required<ClientConfig>;
   private native: NativeBinding;
-  private clientHandle: unknown | null = null;
+  private clientHandle: unknown = null;
   private connected = false;
 
   /**
@@ -57,7 +65,11 @@ export class NativeMygramClient {
    */
   constructor(native: NativeBinding, config: ClientConfig = {}) {
     this.native = native;
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    const mergedConfig: Required<ClientConfig> = { ...DEFAULT_CONFIG, ...config };
+    if (typeof mergedConfig.maxQueryLength !== 'number' || Number.isNaN(mergedConfig.maxQueryLength)) {
+      mergedConfig.maxQueryLength = DEFAULT_MAX_QUERY_LENGTH;
+    }
+    this.config = mergedConfig;
   }
 
   /**
@@ -91,6 +103,8 @@ export class NativeMygramClient {
       }
       throw new ConnectionError(error instanceof Error ? error.message : 'Connection failed');
     }
+
+    return undefined;
   }
 
   /**
@@ -141,7 +155,25 @@ export class NativeMygramClient {
       sortDesc = true
     } = options;
 
-    const parts: string[] = ['SEARCH', table, query];
+    const safeTable = ensureSafeCommandValue(table, 'table');
+    const safeQuery = ensureSafeCommandValue(query, 'query');
+    ensureSafeStringArray(andTerms, 'andTerms');
+    ensureSafeStringArray(notTerms, 'notTerms');
+    const safeFilters = ensureSafeFilters(filters);
+    const safeSortColumn = sortColumn ? ensureSafeCommandValue(sortColumn, 'sortColumn') : '';
+
+    ensureQueryLengthWithinLimit(
+      {
+        query: safeQuery,
+        andTerms,
+        notTerms,
+        filters: safeFilters,
+        sortColumn: safeSortColumn
+      },
+      this.config.maxQueryLength
+    );
+
+    const parts: string[] = ['SEARCH', safeTable, safeQuery];
 
     // Add AND terms
     if (andTerms.length > 0) {
@@ -158,7 +190,7 @@ export class NativeMygramClient {
     }
 
     // Add filters
-    const filterEntries = Object.entries(filters);
+    const filterEntries = Object.entries(safeFilters);
     if (filterEntries.length > 0) {
       parts.push('FILTER');
       filterEntries.forEach(([key, value], index) => {
@@ -168,8 +200,8 @@ export class NativeMygramClient {
     }
 
     // Add sort
-    if (sortColumn) {
-      parts.push('SORT', sortColumn, sortDesc ? 'DESC' : 'ASC');
+    if (safeSortColumn) {
+      parts.push('SORT', safeSortColumn, sortDesc ? 'DESC' : 'ASC');
     }
 
     // Add limit and offset
@@ -180,7 +212,7 @@ export class NativeMygramClient {
     }
 
     const response = await this.sendCommand(parts.join(' '));
-    return this.parseSearchResponse(response);
+    return NativeMygramClient.parseSearchResponse(response);
   }
 
   /**
@@ -194,7 +226,13 @@ export class NativeMygramClient {
   async count(table: string, query: string, options: CountOptions = {}): Promise<CountResponse> {
     const { andTerms = [], notTerms = [], filters = {} } = options;
 
-    const parts: string[] = ['COUNT', table, query];
+    const safeTable = ensureSafeCommandValue(table, 'table');
+    const safeQuery = ensureSafeCommandValue(query, 'query');
+    ensureSafeStringArray(andTerms, 'andTerms');
+    ensureSafeStringArray(notTerms, 'notTerms');
+    const safeFilters = ensureSafeFilters(filters);
+
+    const parts: string[] = ['COUNT', safeTable, safeQuery];
 
     if (andTerms.length > 0) {
       andTerms.forEach((term) => {
@@ -208,7 +246,7 @@ export class NativeMygramClient {
       });
     }
 
-    const filterEntries = Object.entries(filters);
+    const filterEntries = Object.entries(safeFilters);
     if (filterEntries.length > 0) {
       parts.push('FILTER');
       filterEntries.forEach(([key, value], index) => {
@@ -218,7 +256,7 @@ export class NativeMygramClient {
     }
 
     const response = await this.sendCommand(parts.join(' '));
-    return this.parseCountResponse(response);
+    return NativeMygramClient.parseCountResponse(response);
   }
 
   /**
@@ -229,8 +267,10 @@ export class NativeMygramClient {
    * @returns {Promise<Document>} Document object
    */
   async get(table: string, primaryKey: string): Promise<Document> {
-    const response = await this.sendCommand(`GET ${table} ${primaryKey}`);
-    return this.parseDocumentResponse(response);
+    const safeTable = ensureSafeCommandValue(table, 'table');
+    const safePrimaryKey = ensureSafeCommandValue(primaryKey, 'primaryKey');
+    const response = await this.sendCommand(`GET ${safeTable} ${safePrimaryKey}`);
+    return NativeMygramClient.parseDocumentResponse(response);
   }
 
   /**
@@ -240,7 +280,7 @@ export class NativeMygramClient {
    */
   async info(): Promise<ServerInfo> {
     const response = await this.sendCommand('INFO');
-    return this.parseInfoResponse(response);
+    return NativeMygramClient.parseInfoResponse(response);
   }
 
   /**
@@ -263,7 +303,7 @@ export class NativeMygramClient {
    */
   async getReplicationStatus(): Promise<ReplicationStatus> {
     const response = await this.sendCommand('REPLICATION STATUS');
-    return this.parseReplicationStatusResponse(response);
+    return NativeMygramClient.parseReplicationStatusResponse(response);
   }
 
   /**
@@ -321,28 +361,32 @@ export class NativeMygramClient {
    * @returns {Promise<string>} Response from server
    * @throws {ConnectionError} If not connected
    */
-  async sendCommand(command: string): Promise<string> {
-    if (!this.connected || !this.clientHandle) {
-      throw new ConnectionError('Not connected to server');
-    }
+  sendCommand(command: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.connected || !this.clientHandle) {
+        reject(new ConnectionError('Not connected to server'));
+        return;
+      }
 
-    try {
-      const response = this.native.sendCommand(this.clientHandle, command);
-      if (response.startsWith('ERROR ')) {
-        throw new ProtocolError(response.substring(6));
+      try {
+        const response = this.native.sendCommand(this.clientHandle, command);
+        if (response.startsWith('ERROR ')) {
+          throw new ProtocolError(response.substring(6));
+        }
+        resolve(response);
+      } catch (error) {
+        if (error instanceof ProtocolError) {
+          reject(error);
+          return;
+        }
+        const errorMsg = this.native.getLastError(this.clientHandle);
+        reject(new ConnectionError(errorMsg || (error instanceof Error ? error.message : 'Command failed')));
       }
-      return response;
-    } catch (error) {
-      if (error instanceof ProtocolError) {
-        throw error;
-      }
-      const errorMsg = this.native.getLastError(this.clientHandle);
-      throw new ConnectionError(errorMsg || (error instanceof Error ? error.message : 'Command failed'));
-    }
+    });
   }
 
   // Response parsing methods (same as MygramClient)
-  private parseSearchResponse(response: string): SearchResponse {
+  private static parseSearchResponse(response: string): SearchResponse {
     const lines = response.split('\n');
     const firstLine = lines[0];
 
@@ -359,13 +403,13 @@ export class NativeMygramClient {
     let debug: DebugInfo | undefined;
     const debugIndex = lines.findIndex((line) => line === '# DEBUG');
     if (debugIndex !== -1) {
-      debug = this.parseDebugInfo(lines.slice(debugIndex + 1));
+      debug = NativeMygramClient.parseDebugInfo(lines.slice(debugIndex + 1));
     }
 
     return { results, totalCount, debug };
   }
 
-  private parseCountResponse(response: string): CountResponse {
+  private static parseCountResponse(response: string): CountResponse {
     const lines = response.split('\n');
     const firstLine = lines[0];
 
@@ -378,13 +422,13 @@ export class NativeMygramClient {
     let debug: DebugInfo | undefined;
     const debugIndex = lines.findIndex((line) => line === '# DEBUG');
     if (debugIndex !== -1) {
-      debug = this.parseDebugInfo(lines.slice(debugIndex + 1));
+      debug = NativeMygramClient.parseDebugInfo(lines.slice(debugIndex + 1));
     }
 
     return { count, debug };
   }
 
-  private parseDocumentResponse(response: string): Document {
+  private static parseDocumentResponse(response: string): Document {
     if (!response.startsWith('OK DOC ')) {
       throw new ProtocolError(`Invalid GET response: ${response}`);
     }
@@ -403,7 +447,7 @@ export class NativeMygramClient {
     return { primaryKey, fields };
   }
 
-  private parseInfoResponse(response: string): ServerInfo {
+  private static parseInfoResponse(response: string): ServerInfo {
     if (!response.startsWith('OK INFO')) {
       throw new ProtocolError(`Invalid INFO response: ${response}`);
     }
@@ -456,7 +500,7 @@ export class NativeMygramClient {
     return info as ServerInfo;
   }
 
-  private parseReplicationStatusResponse(response: string): ReplicationStatus {
+  private static parseReplicationStatusResponse(response: string): ReplicationStatus {
     if (!response.startsWith('OK REPLICATION ')) {
       throw new ProtocolError(`Invalid REPLICATION STATUS response: ${response}`);
     }
@@ -471,7 +515,7 @@ export class NativeMygramClient {
     return { running, gtid, statusStr: response };
   }
 
-  private parseDebugInfo(lines: string[]): DebugInfo {
+  private static parseDebugInfo(lines: string[]): DebugInfo {
     const debug: Partial<DebugInfo> = {
       queryTimeMs: 0,
       indexTimeMs: 0,

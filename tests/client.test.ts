@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MygramClient } from './client';
-import { ConnectionError } from './errors';
+import { MygramClient } from '../src/client';
+import { ConnectionError, InputValidationError } from '../src/errors';
 
 describe('MygramClient', () => {
   describe('constructor', () => {
@@ -98,6 +98,38 @@ describe('MygramClient', () => {
     it('should throw ConnectionError when not connected - disableDebug', async () => {
       const client = new MygramClient();
       await expect(client.disableDebug()).rejects.toThrow(ConnectionError);
+    });
+  });
+
+  describe('input validation', () => {
+    it('should reject queries containing newline characters', async () => {
+      const client = new MygramClient();
+      await expect(client.search('articles', 'safe\nunsafe')).rejects.toThrow(InputValidationError);
+    });
+
+    it('should reject filters containing newline characters', async () => {
+      const client = new MygramClient();
+      await expect(
+        client.search('articles', 'safe', {
+          filters: { status: 'ok\nfail' }
+        })
+      ).rejects.toThrow(InputValidationError);
+    });
+
+    it('should reject queries exceeding the default length limit', async () => {
+      const client = new MygramClient();
+      const longQuery = 'a'.repeat(1024);
+      const internalLimit = (client as unknown as { config: { maxQueryLength: number } }).config.maxQueryLength;
+      expect(typeof internalLimit).toBe('number');
+      expect(internalLimit).toBeGreaterThan(0);
+      await expect(client.search('articles', longQuery)).rejects.toThrow(InputValidationError);
+      await expect(client.count('articles', longQuery)).rejects.toThrow(InputValidationError);
+    });
+
+    it('should allow longer queries when maxQueryLength is raised', async () => {
+      const client = new MygramClient({ maxQueryLength: 2048 });
+      const longQuery = 'a'.repeat(1024);
+      await expect(client.search('articles', longQuery)).rejects.toThrow(ConnectionError);
     });
   });
 });

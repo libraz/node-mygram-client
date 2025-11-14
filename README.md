@@ -77,7 +77,7 @@ import type {
 
 ## Development
 
-See [CLAUDE.md](CLAUDE.md) for development guidelines.
+Development guidelines are documented within this repository.
 
 ```bash
 # Install dependencies

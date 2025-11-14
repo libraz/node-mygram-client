@@ -26,3 +26,8 @@ coverage/
 # Misc
 .DS_Store
 *.log
+
+# AI assistant artifacts
+CLAUDE.md
+.claude/
+AGENT.md

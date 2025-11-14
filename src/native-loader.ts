@@ -4,16 +4,23 @@
  * This loader is based on node-darts implementation and handles
  * various build configurations and CI environments.
  */
-
+/* eslint-disable no-console */
+/* eslint-disable import/no-dynamic-require */
+/* eslint-disable global-require */
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import * as path from 'path';
 import * as fs from 'fs';
 
 // Detect environment
-const isWindows = process.platform === 'win32';
+const runtimePlatform = process.platform;
+const runtimeArch = process.arch;
+const isWindows = runtimePlatform === 'win32';
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 const nodeABI = process.versions.modules;
-const platform = process.platform;
-const arch = process.arch;
 
 /**
  * Get all possible paths for the native module
@@ -29,7 +36,7 @@ function getNativePaths(): string[] {
 
   const paths: string[] = [
     // Standard node-pre-gyp path with ABI versioning
-    path.join(basePath, 'lib', 'binding', `node-v${nodeABI}-${platform}-${arch}`, moduleName),
+    path.join(basePath, 'lib', 'binding', `node-v${nodeABI}-${runtimePlatform}-${runtimeArch}`, moduleName),
 
     // Standard build output
     path.join(basePath, 'build', 'Release', moduleName),
@@ -37,16 +44,18 @@ function getNativePaths(): string[] {
     path.join(basePath, 'build', moduleName),
 
     // Windows-specific paths
-    ...(isWindows ? [
-      path.join(basePath, 'build', 'default', moduleName),
-      path.join(basePath, 'out', 'Release', moduleName),
-      path.join(basePath, 'out', 'Debug', moduleName),
-      path.join(basePath, 'Release', moduleName),
-      path.join(basePath, 'Debug', moduleName),
-      path.join(basePath, 'addon-build', 'release', 'install-root', moduleName),
-      path.join(basePath, 'addon-build', 'debug', 'install-root', moduleName),
-      path.join(basePath, 'addon-build', 'default', 'install-root', moduleName)
-    ] : []),
+    ...(isWindows
+      ? [
+        path.join(basePath, 'build', 'default', moduleName),
+        path.join(basePath, 'out', 'Release', moduleName),
+        path.join(basePath, 'out', 'Debug', moduleName),
+        path.join(basePath, 'Release', moduleName),
+        path.join(basePath, 'Debug', moduleName),
+        path.join(basePath, 'addon-build', 'release', 'install-root', moduleName),
+        path.join(basePath, 'addon-build', 'debug', 'install-root', moduleName),
+        path.join(basePath, 'addon-build', 'default', 'install-root', moduleName)
+      ]
+      : []),
 
     // Relative to current file
     path.join(__dirname, '..', 'build', 'Release', moduleName),
@@ -59,7 +68,7 @@ function getNativePaths(): string[] {
 /**
  * Try to load native module from various paths
  */
-export function loadNativeModule(): unknown | null {
+export function loadNativeModule(): unknown {
   const paths = getNativePaths();
 
   if (isCI && isWindows) {
@@ -109,7 +118,7 @@ export function loadNativeModule(): unknown | null {
 /**
  * Try to load using bindings module (as fallback)
  */
-export function loadWithBindings(): unknown | null {
+export function loadWithBindings(): unknown {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
     const bindings = require('bindings');
@@ -122,7 +131,7 @@ export function loadWithBindings(): unknown | null {
 /**
  * Main loader function with comprehensive fallback strategy
  */
-export function tryLoadNative(): unknown | null {
+export function tryLoadNative(): unknown {
   // Strategy 1: Try direct paths
   let nativeModule = loadNativeModule();
   if (nativeModule) {
@@ -138,14 +147,10 @@ export function tryLoadNative(): unknown | null {
   // Strategy 3: Try node-pre-gyp
   try {
     const basePath = path.join(__dirname, '..');
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(basePath, 'package.json'), 'utf8')
-    );
+    const packageJson = JSON.parse(fs.readFileSync(path.join(basePath, 'package.json'), 'utf8'));
 
     if (packageJson.binary) {
-      const bindingPath = require('@mapbox/node-pre-gyp').find(
-        path.join(basePath, 'package.json')
-      );
+      const bindingPath = require('@mapbox/node-pre-gyp').find(path.join(basePath, 'package.json'));
       // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
       nativeModule = require(bindingPath);
       if (nativeModule) {

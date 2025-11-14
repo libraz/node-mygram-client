@@ -1,0 +1,135 @@
+import { InputValidationError } from './errors';
+
+export const DEFAULT_MAX_QUERY_LENGTH = 128;
+
+const UNSAFE_CHARACTERS: Array<{ char: string; description: string }> = [
+  { char: '\r', description: 'carriage return (\\r)' },
+  { char: '\n', description: 'line feed (\\n)' },
+  { char: '\u0000', description: 'null byte (\\0)' }
+];
+
+/**
+ * Ensure a command token does not contain characters that would break
+ * the Mygram text protocol (like CR/LF that terminate commands).
+ *
+ * @param {string} value - Token value to validate
+ * @param {string} fieldName - Field name for clearer error messages
+ * @returns {string} The original value when it is safe
+ * @throws {InputValidationError} When the value contains unsafe characters
+ */
+export function ensureSafeCommandValue(value: string, fieldName: string): string {
+  for (const { char, description } of UNSAFE_CHARACTERS) {
+    if (value.includes(char)) {
+      throw new InputValidationError(`Invalid character ${description} found in ${fieldName}`);
+    }
+  }
+  return value;
+}
+
+/**
+ * Validates every entry of a string array.
+ *
+ * @param {string[]} values - Values to validate
+ * @param {string} fieldName - Field name prefix for error context
+ * @returns {string[]} Validated values (same references)
+ */
+export function ensureSafeStringArray(values: string[], fieldName: string): string[] {
+  values.forEach((value, idx) => {
+    ensureSafeCommandValue(value, `${fieldName}[${idx}]`);
+  });
+  return values;
+}
+
+/**
+ * Validates a filters record by ensuring both keys and values are safe.
+ *
+ * @param {Record<string, string>} filters - Filter map
+ * @returns {Record<string, string>} The original filters when safe
+ */
+export function ensureSafeFilters(filters: Record<string, string>): Record<string, string> {
+  Object.entries(filters).forEach(([key, value]) => {
+    ensureSafeCommandValue(key, `filters.${key}.key`);
+    ensureSafeCommandValue(value, `filters.${key}.value`);
+  });
+  return filters;
+}
+
+/**
+ * Calculate the query expression length using the same logic as the server.
+ *
+ * @param {string} query - Base search text
+ * @param {string[]} andTerms - Additional AND terms
+ * @param {string[]} notTerms - NOT terms
+ * @param {Record<string, string>} filters - Filters map
+ * @param {string} sortColumn - Sort column if specified
+ * @returns {number} Total expression length
+ */
+export function calculateQueryExpressionLength(
+  query: string,
+  andTerms: string[],
+  notTerms: string[],
+  filters: Record<string, string>,
+  sortColumn: string
+): number {
+  let { length } = query;
+
+  const accumulateTerms = (terms: string[]): void => {
+    terms.forEach((term) => {
+      length += term.length;
+    });
+  };
+
+  accumulateTerms(andTerms);
+  accumulateTerms(notTerms);
+
+  Object.entries(filters).forEach(([key, value]) => {
+    length += key.length;
+    length += value.length;
+  });
+
+  if (sortColumn) {
+    length += sortColumn.length;
+  }
+
+  return length;
+}
+
+/**
+ * Ensure the query expression respects the configured length limit.
+ *
+ * @param {object} params - Query components
+ * @param {string} params.query - Search text
+ * @param {string[]} params.andTerms - Additional AND terms
+ * @param {string[]} params.notTerms - NOT terms
+ * @param {Record<string, string>} params.filters - Filters map
+ * @param {string} params.sortColumn - Sort column
+ * @param {number} maxLength - Maximum allowed length (0 disables check)
+ * @throws {InputValidationError} When the query exceeds the limit
+ */
+export function ensureQueryLengthWithinLimit(
+  {
+    query,
+    andTerms,
+    notTerms,
+    filters,
+    sortColumn
+  }: {
+    query: string;
+    andTerms: string[];
+    notTerms: string[];
+    filters: Record<string, string>;
+    sortColumn: string;
+  },
+  maxLength: number
+): void {
+  if (maxLength <= 0) {
+    return;
+  }
+
+  const expressionLength = calculateQueryExpressionLength(query, andTerms, notTerms, filters, sortColumn);
+  if (expressionLength > maxLength) {
+    throw new InputValidationError(
+      `Query expression length (${expressionLength}) exceeds maximum allowed length of ${maxLength} characters.`
+    );
+  }
+}

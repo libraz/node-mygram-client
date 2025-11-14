@@ -77,3 +77,22 @@ export class TimeoutError extends MygramError {
     Object.setPrototypeOf(this, TimeoutError.prototype);
   }
 }
+
+/**
+ * Input validation error thrown when client-side validation fails
+ *
+ * @class
+ * @extends MygramError
+ */
+export class InputValidationError extends MygramError {
+  /**
+   * Create an input validation error
+   *
+   * @param {string} message - Error message
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'InputValidationError';
+    Object.setPrototypeOf(this, InputValidationError.prototype);
+  }
+}

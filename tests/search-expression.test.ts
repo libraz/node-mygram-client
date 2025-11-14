@@ -5,7 +5,7 @@ import {
   simplifySearchExpression,
   hasComplexExpression,
   toQueryString
-} from './search-expression';
+} from '../src/search-expression';
 
 describe('parseSearchExpression', () => {
   it('should parse simple term', () => {

@@ -8,19 +8,28 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      exclude: ['**/*.test.ts', '**/*.spec.ts', '**/node_modules/**', '**/dist/**', '**/*.config.ts'],
+      exclude: [
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/*.config.ts',
+        '**/tests/**'
+      ],
       all: true,
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80,
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80
+      }
     },
-    include: ['src/**/*.{test,spec}.ts'],
-    exclude: ['node_modules', 'dist'],
+    include: ['tests/**/*.{test,spec}.ts'],
+    exclude: ['node_modules', 'dist']
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
-    },
-  },
+      '@': resolve(__dirname, './src')
+    }
+  }
 });

@@ -99,6 +99,7 @@ Searches for documents in the specified table.
 **Returns:** Promise resolving to SearchResponse
 
 **Throws:**
+- `InputValidationError` - If the query contains control characters or exceeds the configured length limit
 - `ConnectionError` - If not connected
 - `TimeoutError` - If request times out
 - `ProtocolError` - If server returns an error
@@ -141,6 +142,7 @@ Counts matching documents without retrieving their IDs.
 **Returns:** Promise resolving to CountResponse
 
 **Throws:**
+- `InputValidationError` - If the query contains control characters or exceeds the configured length limit
 - `ConnectionError` - If not connected
 - `TimeoutError` - If request times out
 - `ProtocolError` - If server returns an error
@@ -355,6 +357,7 @@ interface ClientConfig {
   port?: number;           // Server port (default: 11016)
   timeout?: number;        // Connection timeout in ms (default: 5000)
   recvBufferSize?: number; // Receive buffer size in bytes (default: 65536)
+  maxQueryLength?: number; // Maximum query expression length before validation fails (default: 128)
 }
 ```
 
@@ -414,6 +417,13 @@ interface Document {
   primaryKey: string;                // Primary key
   fields: Record<string, string>;    // Document fields (column: value)
 }
+
+### InputValidationError
+
+Client-side validation error thrown when unsafe data would be sent to the server.
+Typical triggers include CR/LF characters inside `table`, `query`, or filter values,
+and queries whose combined expression length exceeds `ClientConfig.maxQueryLength`.
+Adjust your input or increase the limit if longer expressions are required.
 ```
 
 ### ServerInfo
